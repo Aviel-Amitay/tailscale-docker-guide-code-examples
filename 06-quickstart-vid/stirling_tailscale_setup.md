@@ -48,7 +48,7 @@ Do not put the real key directly inside `docker-compose.yaml`.
 
 ## 3. Docker Compose Example
 
-- Example of yaml file [docker-compose.yaml](./docker-compose.yaml):
+- Example of yaml file [docker-compose.yaml](./02-stirlingpdf/docker-compose.yaml):
 
 ```yamlservices:
   tailscale-authkey1:
