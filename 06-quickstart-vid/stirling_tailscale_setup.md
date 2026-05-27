@@ -2,6 +2,11 @@
 
 This guide explains how to run Stirling PDF behind Tailscale using Docker Compose.
 
+
+> Important: DON'T pasted a real Tailscale auth key into ChatGPT, GitHub, logs, or screenshots.  
+In case you did, revoke it from the Tailscale admin console and generate a new one.
+
+
 ## Table tree
 ```
 ├── 06-quickstart-vid
@@ -13,10 +18,17 @@ This guide explains how to run Stirling PDF behind Tailscale using Docker Compos
 │   │   └── docker-compose.yaml
 │   ├── stirling_tailscale_setup.md
 ```
-
-> Important: DON'T pasted a real Tailscale auth key into ChatGPT, GitHub, logs, or screenshots.  
-In case you did, revoke it from the Tailscale admin console and generate a new one.
-
+## Table Content
+- [Generate a Tailscale Auth Key](#1-generate-a-tailscale-auth-key)
+- [Use a .env File](#2-use-a-env-file)
+- [Docker Compose Example](#3-docker-compose-example)
+- [Stirling JSON Config](#4-stirling-json-config)
+- [Verify Tailscale Connection](#5-verify-tailscale-connection)
+- [Open Stirling PDF](#6-open-stirling-pdf)
+- [Troubleshooting](#troubleshooting)
+- [Tailscale GitHub](https://github.com/tailscale-dev/docker-guide-code-examples)
+- [Srirling PDF GitHub](https://github.com/Stirling-Tools/Stirling-PDF)
+---
 ## 1. Generate a Tailscale Auth Key
 
 Go to admin console https://login.tailscale.com/admin/settings/general
@@ -123,7 +135,7 @@ environment:
   - TS_AUTHKEY=${TS_AUTHKEY}
 ```
 
-## 4. Stirling Serve Config
+## 4. Stirling JSON Config
 
 Edit this file [stirling.json](./02-stirlingpdf/config/stirling.json):
 
