@@ -1,6 +1,6 @@
 # Stirling PDF with Tailscale Docker Setup
 
-This guide explains how to run Stirling PDF behind Tailscale using Docker Compose.
+This guide cover how to run both nginx and Stirling PDF, behind the Tailscale using Docker Compose, if you like, you can use buth web application and PDF app with this [Docker Compose](./combine-tailscale-stirlingpdf/) setup.
 
 
 > Important: DON'T pasted a real Tailscale auth key into ChatGPT, GitHub, logs, or screenshots.  
@@ -9,30 +9,50 @@ In case you did, revoke it from the Tailscale admin console and generate a new o
 
 ## Table tree
 ```
-├── 06-quickstart-vid
-│   ├── 01-nginx-basic
-│   │   └── docker-compose.yaml
-│   ├── 02-stirlingpdf
-│   │   ├── config
-│   │   │   └── stirling.json
-│   │   └── docker-compose.yaml
-│   ├── stirling_tailscale_setup.md
+06-quickstart-vid
+├── 01-nginx-basic
+│   └── docker-compose.yaml
+├── 02-stirlingpdf
+│   ├── config
+│   │   └── stirling.json
+│   └── docker-compose.yaml
+├── combine-tailscale-stirlingpdf
+│   ├── config
+│   │   └── stirling.json
+│   └── docker-compose.yaml
+└── stirling_tailscale_setup.md
 ```
 ## Table Content
-- [Generate a Tailscale Auth Key](#1-generate-a-tailscale-auth-key)
-- [Use a .env File](#2-use-a-env-file)
+- [Create a .env File](#1-create-a-env-file)
+- [Generate a Tailscale Auth Key](#2-generate-a-tailscale-key)
 - [Docker Compose Example](#3-docker-compose-example)
 - [Stirling JSON Config](#4-stirling-json-config)
-- [Verify Tailscale Connection](#5-verify-tailscale-connection)
-- [Open Stirling PDF](#6-open-stirling-pdf)
+- [Enable MagicDNS and HTTPS Certificates](#5-enable-magicdns-and-https-certificates)
+- [Verify Tailscale Connection](#6-verify-tailscale-connection)
+- [Open Stirling PDF](#7-open-stirling-pdf)
 - [Troubleshooting](#troubleshooting)
 - [Tailscale GitHub](https://github.com/tailscale-dev/docker-guide-code-examples)
 - [Srirling PDF GitHub](https://github.com/Stirling-Tools/Stirling-PDF)
+- [Documents]()
 ---
-## 1. Generate a Tailscale Auth Key
+## 1. Create a .env File
 
-Go to admin console https://login.tailscale.com/admin/settings/general
+Create a `.env` file in the same directory as your `docker-compose.yaml`, to store your key:
 
+```bash
+TS_AUTHKEY=tskey-auth-kc4MhA5vzX11CNTRL-example
+TS_AUTHKEY_CLIENT=tskey-client-kcRHZB3GxG11CNTRL-example?ephemeral=false
+```
+
+Do not put the real key directly inside `docker-compose.yaml`.
+
+## 2. Generate a Tailscale Key
+
+Go to admin console https://login.tailscale.com/admin/settings/
+
+- Create a 'Auth keys' for the NGINX Tailscale docker.
+ - Life time is up tp 90 days, [What is the diffrence between 'Auto Key' and 'OAuto key'?](#what-is-the-diffrence-between-auto-key-and-oauto-key)  
+ 
 ```text
 Tailscale Admin Console -> Settings -> Keys -> Generate auth key
 ```
@@ -44,146 +64,112 @@ Reusable: enabled
 Ephemeral: disabled
 Pre-approved: enabled
 Expiration: short, for example 1 to 7 days
+```  
+
+- Create a second key for the PDF tool.
+```text
+Tailscale Admin Console -> Settings -> Trust credentials -> Credential
 ```
+ - Select OAuth (Description Optional)
+ - Under "Devices" -> Select 'Core' with a 'Write' access, and add the tag 'container'.
+ - Under "Keys" -> Select 'Auth Keys' with a 'Write' access, and add the tag 'container'.
+---
 
-You do not need an OAuth key for this setup. Use an Auth key.
+### What is the diffrence between 'Auto Key' and 'OAuto key'?  
 
-## 2. Use a .env File
+- Create both 'Auto Key' and 'OAuto key' for Tailscal and the pdf container.  
+Here's a comparison of the key differences between OAuth clients and auth keys in Tailscale:
 
-Create a `.env` file in the same directory as your `docker-compose.yaml`, to store your key:
+| Feature | Auth Keys | OAuth Clients |
+|---|---|---|
+| **Expiry** | Expire after 1–90 days (default 90) | Never expire |
+| **Node ownership** | Node is owned by the user who generated the key | Node is owned by the tag assigned at creation |
+| **Tags** | Optional | Required for created nodes |
+| **API access** | Full API access | Scoped/limited access (e.g., `auth_keys:read`) |
+| **Ephemeral nodes** | Not ephemeral by default | Nodes are ephemeral by default |
 
-```bash
-TS_AUTHKEY=<tskey-auth-NEW_KEY_HERE>
-```
+Docs ref: [Auth Keys vs OAuth; Docker Guide](https://tailscale.com/blog/docker-tailscale-guide#using-oauth)
 
-Do not put the real key directly inside `docker-compose.yaml`.
+### Key points to understand
 
-## 3. Docker Compose Example
+**Auth keys** (`tskey-auth-...`):
+- Authenticate a device as the user who generated the key.
+- Have a maximum lifespan of 90 days, but existing nodes remain authorized until their *node key* expires (default 180 days).
+- Do not require tags (though tags can be applied).
 
-- Example of yaml file [docker-compose.yaml](./02-stirlingpdf/docker-compose.yaml):
+Docs Ref: [Auth Keys](https://tailscale.com/docs/features/access-control/auth-keys)
 
-```yamlservices:
-  tailscale-authkey1:
-    image: tailscale/tailscale:latest
-    container_name: ts-authkey-test
-    hostname: banana
-    environment:
-      - TS_AUTHKEY=${TS_AUTHKEY}
-      - TS_STATE_DIR=/var/lib/tailscale
-      - TS_USERSPACE=false
-    volumes:
-      - ts-authkey-test:/var/lib/tailscale
-    devices:
-      - /dev/net/tun:/dev/net/tun
-    cap_add:
-      - net_admin
-    restart: unless-stopped
-  nginx-authkey-test:
-    image: nginx
-    network_mode: service:tailscale-authkey1
+**OAuth clients** (`tskey-client-...`):
+- Provide delegated, scoped access to the Tailscale API — you can limit what actions are permitted (e.g., only creating auth keys, not modifying ACLs or DNS).
+- Never expire, making them better suited for long-running automation.
+- Require tags; nodes authenticated via OAuth are owned by those tags, not a user.
+- By default, nodes registered via OAuth are marked **ephemeral** (removed when the container stops). To change this, append `?ephemeral=false` to the `TS_AUTHKEY` value.
 
-# Stirling PDF services
-  stirling-ts:
-    image: tailscale/tailscale:latest
-    container_name: stirling-ts
-    hostname: pdf
-    environment:
-      - TS_AUTHKEY=${TS_AUTHKEY}
-      - "TS_EXTRA_ARGS=--advertise-tags=tag:container --reset"
-      - TS_SERVE_CONFIG=/config/stirling.json
-      - TS_STATE_DIR=/var/lib/tailscale
-      - TS_USERSPACE=false
-    volumes:
-      - ${PWD}/config:/config
-      - stirling-ts:/var/lib/tailscale
-    devices:
-      - /dev/net/tun:/dev/net/tun
-    cap_add:
-      - net_admin
-    restart: unless-stopped
-  stirlingpdf:
-    image: frooodle/s-pdf:latest
-    container_name: stirlingpdf
-    network_mode: service:stirling-ts
-    depends_on:
-      - stirling-ts
-    volumes:
-      - ./workspace:/workspace
-      - stirling-config:/configs
-      - stirling-storage:/usr/share/tesseract-ocr/5/tessdata
-    environment:
-      - DOCKER_ENABLE_SECURITY=false
-    restart: unless-stopped
+### Which should you use?
 
-volumes: 
-# Tailscale volumes
-  ts-authkey-test:
-    driver: local
-# Stirling PDF volumes
-  stirling-ts:
-    driver: local
-  stirling-config:
-    driver: local
-  stirling-storage:
-    driver: local
-```
+- Use **auth keys** for simple, short-lived setups or when you don't need tags.
+- Use **OAuth clients** for production automation, CI/CD pipelines, or anywhere you need non-expiring credentials with fine-grained access control.
 
-Do not expose your Oauth key inside of the yaml file:
+- Example of yaml file [docker-compose.yaml](./combine-tailscale-stirlingpdf/docker-compose.yaml):
+
+Do not expose your OAuth key inside of the yaml file, only at the `.env` file:
 
 ```yaml
 environment:
   - TS_AUTHKEY=${TS_AUTHKEY}
+  - TS_AUTHKEY=${TS_OAUTHKEY_SECRET_CLIENT}?ephemeral=false
 ```
+
+## 3. Docker Compose Example  
+
+- Explained of the docker file, you can found at the officle Tailscal page:  [https://tailscale.com/docs/features/containers/docker/how-to/connect-docker-container](https://tailscale.com/docs/features/containers/docker/how-to/connect-docker-container#docker-compose-example-details)
+
+ - How to set an OAuth key, you can found at: https://tailscale.com/docs/features/oauth-clients
 
 ## 4. Stirling JSON Config
 
-Edit this file [stirling.json](./02-stirlingpdf/config/stirling.json):
+- The JSON file [stirling.json](./02-stirlingpdf/config/stirling.json), include a settings that allow https traffic using Tailscale certificate.
 
-```bash
-nano config/stirling.json
-```
-
-- Replace the line `"${TS_CERT_DOMAIN}:443"` with your with your real Tailscale MagicDNS name.
- 
-
-```bash
-sed -i '' 's/${TS_CERT_DOMAIN}/<hostname>.<YOUR-TAILSCAL-DNS>.ts.net/g' stirling.json
-```
 Example:
 
 ```json
 {
-  "TCP": {
-    "443": {
-      "HTTPS": true
-    }
-  },
-  "Web": {
-    "pdf.YOUR-TAILNET.ts.net:443": {
-      "Handlers": {
-        "/": {
-          "Proxy": "http://127.0.0.1:8080"
+    "TCP": {
+      "443": {
+        "HTTPS": true
+      }
+    },
+    "Web": {
+      "${TS_CERT_DOMAIN}:443": {
+        "Handlers": {
+          "/": {
+            "Proxy": "http://127.0.0.1:8080"
+          }
         }
       }
+    },
+    "AllowFunnel": {
+      "${TS_CERT_DOMAIN}:443": false
     }
-  },
-  "AllowFunnel": {
-    "pdf.YOUR-TAILNET.ts.net:443": false
   }
-}
 ```
+## 5. Enable MagicDNS and HTTPS Certificates
+- Go to https://login.tailscale.com/admin/dns  
+  * Scroll to the buttun, and click on the "Enable MagicDNS", and "Enable HTTPS".
+  * Take your unique MagicDNS, and update into the `.env` file with a new line.
+  ```text
+  TS_CERT_DOMAIN=<YOUR-Magic-DNS>.ts.net
+  ```
 
-
-
-Do not leave this in the JSON file:
-
-```json
-"${TS_CERT_DOMAIN}:443"
+ - Example of full `.env` file:
+ ```text
+TS_AUTHKEY=tskey-auth-NEW_KEY_HERE
+TS_AUTHKEY_CLIENT=tskey-client-NEW_KEY_HERE
+TS_CERT_DOMAIN=<YOUR-Magic-DNS>.ts.net
 ```
+- Wait for the certificate to apply for 3 minutes.
 
-A normal JSON file does not automatically replace `${TS_CERT_DOMAIN}` unless you have a script that generates the file from a template.
-
-## 5. Verify Tailscale Connection
+## 6. Verify Tailscale Connection
 
 Check the Tailscale container logs:
 
@@ -208,7 +194,7 @@ aviela@MacBook-M1 config % docker exec -it stirling-ts tailscale status
 10.90.113.31     macbook-m1          tailscale@           macOS  idle, tx 340 rx 268   
 ```
 
-## 6. Open Stirling PDF
+## 7. Open Stirling PDF
 
 Open this URL from your browser:
 
@@ -245,24 +231,6 @@ docker logs stirling-ts
 
 ```bash
 docker ps
-```
-
-### Common issue
-
-If the URL does not open, confirm that `stirling.json` contains your real domain and not:
-
-```text
-${TS_CERT_DOMAIN}
-```
-
-## Notes About `?ephemeral=false`
-
-You usually do not need to add this manually if you generated the key with ephemeral disabled.
-
-Recommended `.env`:
-
-```bash
-TS_AUTHKEY=tskey-auth-NEW_KEY_HERE
 ```
 
 @Write by https://github.com/Aviel-Amitay

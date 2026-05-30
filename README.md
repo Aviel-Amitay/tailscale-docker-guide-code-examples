@@ -17,7 +17,7 @@ For detailed information on Podman compatibility, see the [PODMAN_COMPATIBILITY.
 
 ## 📖 Table of Contents
 
-Step   | Folder  | Link
+Step   | Folder  | README
 |-------|----------|------|
 1 | 
 2 | 
