@@ -8,7 +8,7 @@ services:
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_USERSPACE=false
     volumes:
-      - ts-authkey:/var/lib/tailscale
+      - ts-authkey1:/var/lib/tailscale
     devices:
       - /dev/net/tun:/dev/net/tun
     cap_add:
@@ -57,10 +57,10 @@ volumes:
 # Each volume is stored in a separate directory within this path, and Docker manages the lifecycle of these volumes, including creation, deletion, and cleanup. 
 # By using named volumes, you can easily manage and persist data across container restarts and updates without worrying about the underlying storage details.
 
-# # Tailscale volumes
-#   ts-authkey:
-#     driver: local
-#     name: ts-authkey
+# Tailscale volumes
+  ts-authkey1:
+    driver: local
+    name: ts-authkey
 # Stirling PDF volumes
   stirling-ts:
     driver: local
